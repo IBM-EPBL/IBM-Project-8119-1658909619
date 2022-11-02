@@ -1,0 +1,115 @@
+#include <WiFi.h>//library for wifi
+#include <PubSubClient.h>//library for MQtt 
+#define TRIG_PIN 2 // ESP32 pin GIOP23 connected to Ultrasonic Sensor's TRIG pin
+#define ECHO_PIN 4 // ESP32 pin GIOP22 connected to Ultrasonic Sensor's ECHO pin
+
+
+//-------credentials of IBM Accounts------
+
+#define ORG "nhwq1p"//IBM ORGANITION ID
+#define DEVICE_TYPE "ESP32PROJECT"//Device type mentioned in ibm watson IOT Platform
+#define DEVICE_ID "ESP32"//Device ID mentioned in ibm watson IOT Platform
+#define TOKEN "ESP32PROJECT"     //Token
+String data3;
+float duration_us, distance_cm;
+-
+
+//-------- Customise the above values --------
+char server[] = ORG ".messaging.internetofthings.ibmcloud.com";// Server Name
+char publishTopic[] = "iot-2/evt/Data/fmt/json";// topic name and type of event perform and format in which data to be send
+char subscribetopic[] = "iot-2/cmd/test/fmt/String";// cmd  REPRESENT command type AND COMMAND IS TEST OF FORMAT STRING
+char authMethod[] = "use-token-auth";// authentication method
+char token[] = TOKEN;
+char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;//client id
+
+
+//-----------------------------------------
+WiFiClient wifiClient; // creating the instance for wificlient
+PubSubClient client(server, 1883 ,wifiClient); //calling the predefined client id by passing parameter like server id,portand wificredential
+void setup()// configureing the ESP32 
+{
+  Serial.begin(115200);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  delay(10);
+  Serial.println();
+  wificonnect();
+  mqttconnect();
+}
+
+void loop()// Recursive Function
+{
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  // measure duration of pulse from ECHO pin
+  duration_us = pulseIn(ECHO_PIN, HIGH);
+  // calculate the distance
+  distance_cm = 0.017 * duration_us;
+  // print the value to Serial Monitor
+  Serial.print("distance: ");
+  Serial.print(distance_cm);
+  Serial.println(" cm");
+  delay(500);
+  if(distance_cm<100){
+    PublishData(distance_cm);
+  }
+  delay(1000);
+  if (!client.loop()) {
+    mqttconnect();
+  }
+}
+
+
+
+/.....................................retrieving to Cloud.............................../
+
+void PublishData(float distance_cm) {
+  mqttconnect();//function call for connecting to ibm
+  /*
+     creating the String in in form JSon to update the data to ibm cloud
+  */
+  String payload = "{\"Alert\":\"ON\"";
+  payload += "," "\"Distance_cm\":";
+  payload += distance_cm;
+  payload += "}";
+
+  
+  Serial.print("Sending payload: ");
+  Serial.println(payload);
+
+  
+  if (client.publish(publishTopic, (char*) payload.c_str())) {
+    Serial.println("Publish ok");// if it sucessfully upload data on the cloud then it will print publish ok in Serial monitor or else it will print publish failed
+  } else {
+    Serial.println("Publish failed");
+  }
+  
+}
+void mqttconnect() {
+  if (!client.connected()) {
+    Serial.print("Reconnecting client to ");
+    Serial.println(server);
+    while (!!!client.connect(clientId, authMethod, token)) {
+      Serial.print(client.connect(clientId, authMethod, token));
+      Serial.print(".");
+      delay(500);
+    }
+    Serial.println();
+  }
+}
+void wificonnect() //function defination for wificonnect
+{
+  Serial.println();
+  Serial.print("Connecting to ");
+
+  WiFi.begin("Wokwi-GUEST", "", 6);//passing the wifi credentials to establish the connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
